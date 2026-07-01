@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Stratified earth palette */
+  --core: #0b0a08;
+  --slate: #2b2a26;
+  --umber: #5b4327;
+  --ochre: #b07d3a;
+  --sand: #cdb089;
+  --bone: #ede6d6;
+  --mineral: #3fa89b;
+  --fault: #a6442e;
+  --quartz: #8c8a82;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--core);
+  color: var(--bone);
+  font-family: var(--font-mark), ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-engrave {
+  font-family: var(--font-engrave), Georgia, serif;
+}
+
+/* Fine sediment grain over the whole core. */
+.core-grain {
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--core);
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(176, 125, 58, 0.08), transparent 45%),
+    radial-gradient(circle at 80% 90%, rgba(63, 168, 155, 0.05), transparent 50%);
+}
+
+.core-grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 1;
+}
+
+/* Engraved text: pressed into stone, faint top highlight, dark inset shadow. */
+.engraved {
+  color: rgba(237, 230, 214, 0.82);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 -1px 0 rgba(255, 245, 224, 0.06);
+  letter-spacing: 0.02em;
+}
+
+.etched {
+  color: rgba(205, 176, 137, 0.7);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Stone slab surface used by panels and instruments. */
+.stone {
+  background:
+    linear-gradient(180deg, rgba(91, 67, 39, 0.18), rgba(11, 10, 8, 0.55)),
+    linear-gradient(180deg, #23211d 0%, #16140f 100%);
+  border: 1px solid rgba(140, 138, 130, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 230, 214, 0.05),
+    inset 0 -10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.resin {
+  background:
+    linear-gradient(180deg, rgba(63, 168, 155, 0.06), rgba(11, 10, 8, 0.4)),
+    linear-gradient(180deg, rgba(35, 33, 29, 0.9), rgba(16, 14, 11, 0.95));
+  border: 1px solid rgba(63, 168, 155, 0.22);
+  box-shadow:
+    inset 0 0 24px rgba(63, 168, 155, 0.06),
+    inset 0 2px 0 rgba(237, 230, 214, 0.04);
+}
+
+/* Mineral vein shimmer for the Bedrock Rail. */
+.bedrock-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(176, 125, 58, 0.0) 40%,
+    rgba(205, 176, 137, 0.12) 50%,
+    rgba(176, 125, 58, 0.0) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* Depth vignette below the surface. */
+.depth-vignette {
+  background: radial-gradient(
+    120% 80% at 50% 0%,
+    rgba(176, 125, 58, 0.12) 0%,
+    rgba(11, 10, 8, 0) 35%,
+    rgba(11, 10, 8, 0.6) 100%
+  );
+}
+
+/* Thin engraved depth ticks for the gauge. */
+.tick-line {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(205, 176, 137, 0.5) 0px,
+    rgba(205, 176, 137, 0.5) 1px,
+    transparent 1px,
+    transparent 12px
+  );
+}
+
+/* Focus ring for accessibility on dark stone. */
+:focus-visible {
+  outline: 2px solid var(--mineral);
+  outline-offset: 2px;
+}
+
+/* Custom scrollbar in the column. */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgba(140, 138, 130, 0.3);
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.08s !important;
+  }
+}
