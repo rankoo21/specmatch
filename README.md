@@ -1,16 +1,37 @@
+<div align="center">
+
 # Strata
 
-"Memory, settled into stone."
+**Memory, settled into stone.**
 
-Strata is a collective memory that settles into geological layers and hardens
-over time. People add testimonies about a subject. GenLayer reads each new
-testimony against the accumulated layers and decides whether it corroborates,
-contradicts, or distorts what is already recorded, and how much weight it adds.
-What recurs sinks and hardens into canonical rock. What stands alone floats near
-the surface. Contradictions crack a fault.
+A collective, consensus-weighted memory that settles testimonies into geological layers and hardens the agreed record into canonical rock.
 
-The whole app reads as depth, not as a scrollable list: one continuous core
-sample you travel through with a brass-and-glass depth gauge.
+[![Live Demo](https://img.shields.io/badge/Live_Demo-strata--bs2.pages.dev-6B4F3A?style=for-the-badge)](https://strata-bs2.pages.dev)
+[![Network: Testnet Bradbury](https://img.shields.io/badge/Network-Testnet_Bradbury-8A6D3B?style=for-the-badge)](https://explorer-bradbury.genlayer.com/address/0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd)
+
+[![GenLayer Intelligent Contract](https://img.shields.io/badge/GenLayer-Intelligent_Contract-4E3B2A?style=flat-square)](https://genlayer.com)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14-5C5346?style=flat-square)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-70614A?style=flat-square)](https://www.typescriptlang.org)
+[![Tests](https://img.shields.io/badge/Tests-Passing-3E5C3A?style=flat-square)](#8-running-locally)
+
+</div>
+
+## Overview
+
+Strata is a tamper-resistant shared memory built on GenLayer. People add testimonies about a single subject, and each new testimony is read against everything already recorded. GenLayer decides whether it corroborates, contradicts, or distorts the accumulated record, and how much weight it carries. What recurs sinks and hardens into canonical rock. What stands alone floats near the surface. Contradictions crack a fault.
+
+The whole app reads as depth, not as a scrollable list. You travel through one continuous core sample with a brass-and-glass depth gauge: the deeper a layer sits, the older and more agreed it is. The deep is the agreed. There is no approve or reject, no vote, no verdict. There is only sediment, weight, and stone.
+
+Reads work with no wallet, so you can browse the column, scrub through depth, and open sealed cores right away. To write a testimony, connect a MetaMask wallet funded from the GenLayer Bradbury faucet, and you pay only network fees.
+
+- **Live app:** https://strata-bs2.pages.dev
+- **Contract (Bradbury):** `0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd` on the [Bradbury explorer](https://explorer-bradbury.genlayer.com/address/0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd)
+
+### How it works, in three steps
+
+1. **Drop a testimony.** You add a claim about the subject, and it enters as loose silt at the surface.
+2. **The record reads it.** GenLayer validators classify the new claim against the existing layers and agree on a relation and a weight band. The layer settles, corroborates, or cracks a fault.
+3. **The agreed hardens.** Recurring, well-supported layers sink and harden into canonical rock. You can then seal a core: a preserved slice of the column at a moment in time.
 
 ---
 
@@ -207,7 +228,7 @@ mock or the contract adapter from the env, and both implement the identical
 `StrataAdapter` interface, so not a line of UI changes between offline and live.
 
 This build is deployed on Bradbury at
-`0x94f1c9cE355D17EEa1629c1977032f855C4CAe11`.
+`0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd`.
 
 ## 10. Design principles
 
