@@ -5,6 +5,7 @@ from conftest import (
     contradict_response,
     new_response,
     relation_response,
+    relation_dict,
 )
 
 
@@ -102,7 +103,9 @@ def test_isolated_claim_cannot_self_harden(deploy, direct_vm):
     column_id = deploy.open_column("The bridge closure", 1000)
     for i in range(4):
         direct_vm.clear_mocks()
-        direct_vm.mock_llm(r".*", new_response(band="strong", claim=f"Distinct claim number {i}"))
+        direct_vm.mock_llm(
+            r".*", new_response(band="strong", claim=f"Separate observation numbered {i}")
+        )
         deploy.add_testimony(column_id, f"An entirely separate observation numbered {i}.", "inferred", 2000 + i)
     layers = deploy.get_layers(column_id, 0, 20)
     assert len(layers) == 4
@@ -240,3 +243,118 @@ def test_summary_counts(deploy, direct_vm):
     assert summary["layers"] == 1
     assert summary["testimonies"] == 2
     assert summary["faults"] == 1
+
+
+# ---------------------------------------------------------------------------
+# add_testimony: SUBSTANCE-LEVEL consensus validator (adversarial)
+#
+# These exercise validator_fn directly through direct_vm.run_validator(). The
+# leader mock is armed by a real add_testimony call against a seeded layer, so
+# the captured validator re-runs the same classification. Each test feeds a
+# candidate peer classification and asserts whether the validator agrees. The
+# validator judges SUBSTANCE (relation label, weight band, the target layer it
+# points at, and the canonical claim), never output shape alone.
+# ---------------------------------------------------------------------------
+
+def _arm_corroborate_validator(deploy, direct_vm):
+    """Seed a column with one layer, then run a corroborating testimony so the
+    validator is captured with a corroborate-against-layer-0 leader mock."""
+    column_id, layer_id = _open_with_first_layer(deploy, direct_vm)
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*", corroborate_response(target=0, band="strong", claim=BRIDGE_CLAIM))
+    deploy.add_testimony(column_id, CORROBORATE_TEXT, "heard", 3000)
+    return column_id, layer_id
+
+
+def test_validator_agrees_on_matching_substance(deploy, direct_vm):
+    # A peer that reaches the same relation, band, target layer, and a claim
+    # that restates the same fact is consensus. The validator agrees.
+    _arm_corroborate_validator(deploy, direct_vm)
+    theirs = relation_dict(
+        "corroborates", 0, "strong",
+        "The bridge was closed and water was at the second step around noon.",
+    )
+    assert direct_vm.run_validator(leader_result=theirs) is True
+
+
+def test_validator_rejects_relation_disagreement(deploy, direct_vm):
+    # Same band and target, but the peer calls it a contradiction. Relation
+    # routes the whole state update, so this well-formed but substantively
+    # different classification is rejected.
+    _arm_corroborate_validator(deploy, direct_vm)
+    theirs = relation_dict("contradicts", 0, "strong", BRIDGE_CLAIM)
+    assert direct_vm.run_validator(leader_result=theirs) is False
+
+
+def test_validator_rejects_band_disagreement(deploy, direct_vm):
+    # Same relation and target, but a different weight band would settle the
+    # layer by a different amount. Rejected.
+    _arm_corroborate_validator(deploy, direct_vm)
+    theirs = relation_dict("corroborates", 0, "slight", BRIDGE_CLAIM)
+    assert direct_vm.run_validator(leader_result=theirs) is False
+
+
+def test_validator_rejects_non_matching_target_layer(deploy, direct_vm):
+    # The peer agrees on relation and band but points corroboration at a
+    # DIFFERENT layer index (a non-matching target). Corroborating different
+    # history is a substantive disagreement, so it is rejected.
+    column_id, layer_id = _open_with_first_layer(deploy, direct_vm)
+    # Add a second, distinct floating layer so index 1 exists.
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*", new_response(band="slight", claim="A separate lamp-post note"))
+    deploy.add_testimony(column_id, "A wholly separate note about a distant lamp post.", "heard", 2500)
+
+    # Arm the validator with a corroborate-against-layer-0 leader.
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*", corroborate_response(target=0, band="strong", claim=BRIDGE_CLAIM))
+    deploy.add_testimony(column_id, CORROBORATE_TEXT, "recorded", 3000)
+
+    theirs = relation_dict("corroborates", 1, "strong", BRIDGE_CLAIM)
+    assert direct_vm.run_validator(leader_result=theirs) is False
+
+
+def test_validator_rejects_divergent_claim_substance(deploy, direct_vm):
+    # Relation, band, and target all line up, but the peer's canonical claim
+    # restates a substantively different fact (shares no meaningful words). The
+    # nodes are not asserting the same thing, so the validator disagrees.
+    _arm_corroborate_validator(deploy, direct_vm)
+    theirs = relation_dict(
+        "corroborates", 0, "strong",
+        "Mountain snowfall totals climbed sharply overnight elsewhere.",
+    )
+    assert direct_vm.run_validator(leader_result=theirs) is False
+
+
+def test_validator_rejects_non_return_result(deploy, direct_vm):
+    # A leader that errored (no Return value) can never be agreed with.
+    _arm_corroborate_validator(deploy, direct_vm)
+    assert direct_vm.run_validator(leader_error=Exception("[LLM_ERROR] boom")) is False
+
+
+def test_validator_rejects_truth_fragment_padded_with_inventions(deploy, direct_vm):
+    _arm_corroborate_validator(deploy, direct_vm)
+    padded = relation_dict(
+        "corroborates",
+        0,
+        "strong",
+        (
+            "The bridge closed and water reached the second step by noon, while aliens "
+            "landed nearby, gold was discovered, the mayor resigned, and a volcano erupted."
+        ),
+    )
+    assert direct_vm.run_validator(leader_result=padded) is False
+
+
+def test_persistence_rejects_canonical_claim_ungrounded_in_testimony(deploy, direct_vm):
+    column_id = deploy.open_column("The bridge closure", 1000)
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(
+        r".*",
+        new_response(
+            band="strong",
+            claim="Aliens landed nearby and a volcano erupted while the mayor resigned.",
+        ),
+    )
+    with direct_vm.expect_revert("canonical claim was not grounded"):
+        deploy.add_testimony(column_id, BRIDGE_TEXT, "witnessed", 2000)
+    assert deploy.get_layers(column_id, 0, 20) == []

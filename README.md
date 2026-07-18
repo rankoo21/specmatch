@@ -14,20 +14,18 @@
 
 ## On-chain proof
 
-Strata is deployed and exercised on GenLayer Bradbury. The lifecycle below is real: a column was opened, corroborated twice, and cracked by a contradiction. Every hash links to the transaction on the Bradbury explorer.
+- **Contract:** [`0x571a4746e0f4274627585a57a9c3bc23a5820880`](https://explorer-bradbury.genlayer.com/address/0x571a4746e0f4274627585a57a9c3bc23a5820880)
+- **Live app:** [strata-bs2.pages.dev](https://strata-bs2.pages.dev)
+- **Validation:** `genvm-lint` passes; **23 direct tests pass**.
+- **Current hardened state:** 4 columns, 4 layers, 4 testimonies, and 0 faults.
 
-**Contract:** [`0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd`](https://explorer-bradbury.genlayer.com/address/0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd)
+### Reviewer remediation
 
-### Verified lifecycle on Bradbury
+Strata now uses Jaccard intersection-over-union, rejects padded or unsupported canonical claims, resolves target layers deterministically from lexical overlap, and compares relations by state-driving polarity: `support`, `conflict`, or `new`. Adjacent weight bands are tolerated, but materially different bands remain disagreements. The leader's exact claim is grounded before persistence; no second free-form claim is compared.
 
-| Step | Method | Transaction |
-| --- | --- | --- |
-| Open a memory column | `open_column` | [`0x8908e3...11aa7`](https://explorer-bradbury.genlayer.com/tx/0x8908e328575885998f5066824109f3467c4d34cb74907a17af6771c613a11aa7) |
-| Corroborating testimony | `add_testimony` | [`0x401aa7...adef4`](https://explorer-bradbury.genlayer.com/tx/0x401aa7908291f63d3408c2d78470070f8bf3a7ca91abae172919c1f1bbfadef4) |
-| Corroborating testimony, merged and weighted | `add_testimony` | [`0x9f983e...49f1fa`](https://explorer-bradbury.genlayer.com/tx/0x9f983ec004bd51bc7c497958a6f52ec0900a1f007a7ae0136a29c60c0349f1fa) |
-| Contradicting testimony, cracked a fault | `add_testimony` | [`0xf7c5e6...71eeeb`](https://explorer-bradbury.genlayer.com/tx/0xf7c5e6e5af0ed99bbe671eff81552a28927e5a5871d9911b4caa1810ec71eeeb) |
+### Current Bradbury limitation
 
-**Live app:** https://strata-bs2.pages.dev
+The deployed leader correctly classified the latest corroboration and produced a grounded claim, but Bradbury ended the attempts with `LEADER_TIMEOUT` and all validators `NOT_VOTED`. Therefore this README does **not** claim a finalized live merge or fault on the hardened deployment. Merge and fault behavior is verified by the 23 passing direct tests; live finalization is currently blocked by validator infrastructure, not a recorded contract disagreement.
 
 ## What it is
 
@@ -95,7 +93,7 @@ The adapter swap is invisible to the UI. `src/lib/genlayer/index.ts` selects the
 
 ```
 NEXT_PUBLIC_STRATA_MODE=contract
-NEXT_PUBLIC_STRATA_CONTRACT=0x53c9A1EA3F5bc8c276F9Ce97ceb2f6C2cC97cbEd
+NEXT_PUBLIC_STRATA_CONTRACT=0x571a4746e0f4274627585a57a9c3bc23a5820880
 NEXT_PUBLIC_STRATA_NETWORK=bradbury
 ```
 

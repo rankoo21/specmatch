@@ -1,4 +1,4 @@
-import { createClient } from "genlayer-js";
+import { createClient, createAccount, generatePrivateKey } from "genlayer-js";
 import { studionet, testnetBradbury, localnet } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 import type {
@@ -83,7 +83,7 @@ export class ContractAdapter implements StrataAdapter {
   readonly mode = "contract" as const;
   private readonly config: ContractAdapterConfig;
   private readonly chain: ReturnType<typeof pickChain>;
-  // Account-less client used for reads. Works with no wallet at all.
+  // Account-attached ephemeral client used for reads. It works without a wallet.
   private readClient: AnyClient | null = null;
   // Wallet-backed client, only present after a successful connectWallet().
   private walletClient: AnyClient | null = null;
@@ -97,11 +97,14 @@ export class ContractAdapter implements StrataAdapter {
 
   // -- identity (the core tag) ----------------------------------------
 
-  // Read-only client: created with a chain and no account. Anyone can read the
-  // strata with this, wallet or not. Never used for writes.
+  // Read-only client: created with a chain and an ephemeral throwaway account.
+  // The account is never funded and never used for writes; it exists only so
+  // genlayer-js has an account context and view calls never throw
+  // "No account set". Anyone can read the strata with this, wallet or not.
   private getReadClient(): AnyClient {
     if (this.readClient) return this.readClient;
-    this.readClient = createClient({ chain: this.chain });
+    const account = createAccount(generatePrivateKey());
+    this.readClient = createClient({ chain: this.chain, account });
     return this.readClient;
   }
 

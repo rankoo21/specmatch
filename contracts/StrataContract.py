@@ -148,17 +148,56 @@ def _word_set(text: str) -> set:
 
 
 def _overlap_score(a: str, b: str) -> int:
-    """Deterministic 0..100 lexical overlap. The reproducible backstop that
-    bounds the model so one node cannot invent a corroboration out of nothing."""
+    """Bidirectional Jaccard overlap (0..100).
+
+    Using the union denominator prevents a long fabricated claim from passing
+    merely because it contains every word of a much shorter truthful phrase.
+    """
     sa = _word_set(a)
     sb = _word_set(b)
     if not sa or not sb:
         return 0
     inter = len(sa & sb)
-    denom = min(len(sa), len(sb))
-    if denom == 0:
+    union = len(sa | sb)
+    if union == 0:
         return 0
-    return (inter * 100) // denom
+    return (inter * 100) // union
+
+
+def _claim_grounded(testimony: str, claim: str) -> bool:
+    """The claim must mostly come from the testimony in both directions."""
+    source = _word_set(testimony)
+    proposed = _word_set(claim)
+    if not source or not proposed:
+        return False
+    shared = len(source & proposed)
+    # At least half of the canonical claim must be supported, and it must cover
+    # a meaningful part of the source. This rejects padded inventions while
+    # allowing a concise neutral restatement.
+    return (shared * 100) // len(proposed) >= 50 and (shared * 100) // len(source) >= 20
+
+
+# Two canonical claim restatements agree in substance when their meaningful
+# words overlap past this share. Comparative, never byte-equality.
+CLAIM_AGREE_MIN = 30
+
+
+def _claim_agrees(a: str, b: str) -> bool:
+    """Whether two nodes' canonical restatements describe the same asserted
+    fact. Compared by meaningful-word overlap, never by byte-equality on prose:
+    two validators phrasing the same claim differently still agree, while a node
+    that restates a substantively different claim disagrees."""
+    sa = _word_set(a)
+    sb = _word_set(b)
+    if not sa or not sb:
+        # Wordless or tiny-token claims: fall back to a lowercased compare so an
+        # empty-vs-filled claim still counts as a disagreement.
+        return str(a).strip().lower() == str(b).strip().lower()
+    inter = len(sa & sb)
+    union = len(sa | sb)
+    if union == 0:
+        return False
+    return (inter * 100) // union >= CLAIM_AGREE_MIN
 
 
 @allow_storage
@@ -655,6 +694,19 @@ class StrataContract(gl.Contract):
                 target = -1
             if target < -1 or target >= len(existing):
                 target = -1
+            # For any relation that bears on an existing layer, resolve the
+            # target DETERMINISTICALLY from lexical overlap with the stored
+            # strata rather than trusting the model's index. Independent LLM runs
+            # frequently disagree on the raw index (0-based vs 1-based, or a near
+            # tie between similar layers), which used to surface as a spurious
+            # DETERMINISTIC_VIOLATION even when both nodes agreed on the relation
+            # and meant the same layer. Snapping to det_best_index makes the
+            # load-bearing target identical across nodes while the semantic
+            # relation judgement stays with the model. The empty-existing and
+            # no-overlap cases still fall back to a new isolated claim below.
+            if relation != REL_NEW and existing:
+                if det_best_index != -1 and det_best_score >= 12:
+                    target = det_best_index
             claim = _clean(data.get("claim", ""), MAX_CLAIM_LEN)
             if not claim:
                 claim = text_clean[:MAX_CLAIM_LEN]
@@ -665,19 +717,105 @@ class StrataContract(gl.Contract):
                 "claim": claim,
             }
 
+        # Ordered bands for tolerant (off-by-one) comparison. Two independent
+        # LLM runs routinely land one notch apart on how strongly a testimony
+        # bears on the record; demanding an exact band match between two free
+        # generations is not consensus-stable and forces spurious
+        # DETERMINISTIC_VIOLATION disagreement on a live validator set.
+        _BAND_ORDER = {BAND_SLIGHT: 0, BAND_MODERATE: 1, BAND_STRONG: 2}
+
         def validator_fn(leaders_res: gl.vm.Result) -> bool:
-            # Comparative validation: rerun the classification and require
-            # agreement on the relation label and the coarse weight band. One
-            # node cannot rewrite history by inventing a different relation.
+            # Comparative validation on the SUBSTANCE that actually drives stored
+            # strata, judged against the LEADER'S exact output plus the on-chain
+            # layers and this testimony. The validator reruns the classification
+            # to reach its own view of the load-bearing routing fields (relation
+            # and target layer) and must agree on them, because those route the
+            # entire state update. It does NOT require the leader's free-form
+            # canonical claim to lexically match a second independently generated
+            # claim (two faithful restatements legitimately diverge) nor an exact
+            # weight-band match (off-by-one is tolerated). Instead the leader's
+            # exact claim must be grounded in this testimony, and for a targeted
+            # relation the testimony must share real language with the layer it
+            # points at. This keeps consensus on what changes the record while
+            # removing the fragile double-generation matching. Never byte-equality
+            # on LLM prose, never a schema-only shape check.
             if not isinstance(leaders_res, gl.vm.Return):
                 return False
             mine = leader_fn()
             theirs = leaders_res.calldata
+
             their_relation = _normalize_relation(theirs.get("relation", ""))
             their_band = _normalize_band(theirs.get("weight_band", ""))
-            if mine["relation"] != their_relation:
+
+            # 1. Relation POLARITY must agree, not the exact 4-way label. The
+            # load-bearing distinction is the direction of the state update:
+            #   - support side  -> corroborates (sinks/strengthens a layer)
+            #   - conflict side -> contradicts OR distorts (cracks a fault)
+            #   - new           -> floats an isolated claim
+            # Two independent LLM runs frequently split hairs between contradicts
+            # and distorts, or between corroborates and new for a paraphrase, even
+            # when they agree on the direction. Requiring an exact 4-way match
+            # forced spurious DETERMINISTIC_VIOLATION disagreement on a live
+            # validator set. Agreeing on polarity keeps corroborate-vs-contradict
+            # (the decision that actually moves the record up or down) under
+            # consensus while tolerating the label-granularity noise.
+            def _polarity(rel: str) -> str:
+                if rel == REL_CORROBORATES:
+                    return "support"
+                if rel in (REL_CONTRADICTS, REL_DISTORTS):
+                    return "conflict"
+                return "new"
+
+            if _polarity(mine["relation"]) != _polarity(their_relation):
                 return False
-            if mine["weight_band"] != their_band:
+
+            # 2. Coarse weight band must agree within one notch. The band maps
+            # to an integer weight contribution; an exact match between two free
+            # generations is unstable, but a two-notch gap (slight vs strong) is
+            # a real disagreement about how much the record should move.
+            if abs(_BAND_ORDER.get(mine["weight_band"], 1) - _BAND_ORDER.get(their_band, 1)) > 1:
+                return False
+
+            try:
+                their_target = int(theirs.get("target_layer", -1))
+            except Exception:
+                their_target = -1
+            if their_target < -1 or their_target >= len(existing):
+                their_target = -1
+
+            their_claim = _clean(theirs.get("claim", ""), MAX_CLAIM_LEN)
+            # The exact canonical claim proposed for storage must itself be a
+            # faithful restatement of this testimony, not a truthful fragment
+            # padded with unrelated invented assertions.
+            if not _claim_grounded(text_clean, their_claim):
+                return False
+
+            if _polarity(mine["relation"]) == "new":
+                # 3a. For a new isolated claim both nodes must agree there is no
+                # existing layer being targeted. The leader's claim is already
+                # grounded in the testimony above; a second free claim match is
+                # not required.
+                if mine["target_layer"] != -1 or their_target != -1:
+                    return False
+                return True
+
+            # 3b. For corroborate/contradict/distort the two nodes must point at
+            # the SAME target layer. Agreeing on the label while pointing at
+            # different layers would corroborate or fault different history, so
+            # that is a substantive disagreement.
+            if mine["target_layer"] != their_target:
+                return False
+            if their_target == -1:
+                return False
+
+            # 4. Both nodes' target must share real language with the layer they
+            # claim to relate to. This grounds the relation in the actual strata
+            # so a node cannot corroborate or fault a layer it does not match.
+            # The leader's own claim is grounded in the testimony above and the
+            # testimony is grounded in the target layer here, so a fragile second
+            # free-claim lexical match is not required for consensus.
+            target_claim = existing[their_target].claim
+            if _overlap_score(text_clean, target_claim) < 12:
                 return False
             return True
 
@@ -689,6 +827,12 @@ class StrataContract(gl.Contract):
         if target < -1 or target >= len(existing):
             target = -1
         claim = _clean(agreed.get("claim", ""), MAX_CLAIM_LEN) or text_clean[:MAX_CLAIM_LEN]
+
+        # Persistence backstop: refuse a canonical claim that is not grounded in
+        # the exact testimony being recorded. This runs on the leader result
+        # after consensus and before any layer, fault, or testimony is written.
+        if not _claim_grounded(text_clean, claim):
+            raise gl.vm.UserError(f"{ERROR_LLM} The canonical claim was not grounded in the testimony.")
 
         # Deterministic guard: a corroboration/contradiction/distortion must
         # point at a layer that truly shares language. If the model claims a

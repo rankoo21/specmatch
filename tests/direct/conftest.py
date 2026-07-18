@@ -48,6 +48,17 @@ def new_response(band: str = "moderate", claim: str = "") -> str:
     return relation_response("new", -1, band, claim or "A new claim about the event.")
 
 
+def relation_dict(relation: str, target: int, band: str, claim: str) -> dict:
+    """Same shape as relation_response, but a dict for driving run_validator
+    with an explicit leader classification."""
+    return {
+        "relation": relation,
+        "target_layer": target,
+        "weight_band": band,
+        "claim": claim,
+    }
+
+
 @pytest.fixture
 def deploy(direct_deploy, direct_vm, direct_alice):
     """Deploy the Strata contract with alice as owner and a default 'new' mock."""

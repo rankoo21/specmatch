@@ -34,6 +34,8 @@ function logTx(label, hash) {
 }
 
 async function main() {
+  if (!PK) throw new Error("Missing GENLAYER_PRIVATE_KEY in .env.deploy");
+  if (!ADDR) throw new Error("Missing STRATA_CONTRACT_ADDRESS in .env.deploy");
   const acc = createAccount(PK.startsWith("0x") ? PK : `0x${PK}`);
   const c = createClient({ chain: testnetBradbury, account: acc });
   console.log("Signer:", acc.address);
@@ -49,6 +51,7 @@ async function main() {
         const h = await c.writeContract({ address: ADDR, functionName: fn, args, value: 0n });
         logTx(attempt > 1 ? `${label} (attempt ${attempt})` : label, h);
         await wait(h);
+        await new Promise((r) => setTimeout(r, 8000));
         return h;
       } catch (e) {
         lastErr = e;
@@ -63,7 +66,7 @@ async function main() {
 
   await write("open_column", "open_column", ["Bridge closure, June 2021", Date.now()]);
   const cols = await read("get_columns", [0, 20]);
-  const colId = g(cols[cols.length - 1], "id");
+  const colId = g(cols[0], "id");
   console.log("    -> column:", colId, "\n");
 
   await write("add_testimony (corroborating #1)", "add_testimony", [colId, "The water reached the second step of the bridge by noon.", "witnessed", Date.now()]);
