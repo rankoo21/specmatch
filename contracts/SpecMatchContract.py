@@ -208,21 +208,18 @@ class StrataContract(gl.Contract):
                 mine = analyze()
                 verdict = _clean(theirs.get("verdict"), 20).lower()
                 confidence = _clean(theirs.get("confidence"), 20).lower()
-                statuses = theirs.get("statuses")
                 checks = theirs.get("checks")
                 if verdict not in VERDICTS or confidence not in CONFIDENCES:
                     return False
-                if not isinstance(statuses, list) or not isinstance(checks, list):
+                if not isinstance(checks, list):
                     return False
-                if statuses != mine["statuses"]:
-                    return False
-                # Re-normalize leader evidence so fabricated excerpts cannot be accepted.
+                # Re-normalize leader evidence so fabricated excerpts cannot be
+                # accepted, then compare only the load-bearing compatibility
+                # verdict. Confidence and per-dimension statuses vary between
+                # independent LLM runs; requiring exact agreement on them drives
+                # honest validators to UNDETERMINED.
                 normalized_leader = _normalize_analysis(theirs, payload)
-                return (
-                    verdict == mine["verdict"]
-                    and confidence == mine["confidence"]
-                    and normalized_leader["statuses"] == mine["statuses"]
-                )
+                return verdict == mine["verdict"] and normalized_leader["verdict"] == mine["verdict"]
             except Exception:
                 return False
 

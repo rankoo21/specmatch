@@ -111,10 +111,13 @@ def test_validator_rejects_wrong_verdict(deploy, direct_vm):
     assert direct_vm.run_validator(leader_result=leader_dict("breaking")) is False
 
 
-def test_validator_rejects_material_status_omission(deploy, direct_vm):
+def test_validator_accepts_same_verdict_with_differing_statuses(deploy, direct_vm):
+    # Consensus compares only the load-bearing compatibility verdict. Per-check
+    # status sets vary between independent LLM runs, so a matching verdict must
+    # still agree instead of forcing UNDETERMINED.
     statuses = ["match", "mismatch", "match", "match", "match"]
     arm_validator(deploy, direct_vm, analysis_response("breaking", "high", statuses))
-    assert direct_vm.run_validator(leader_result=leader_dict("breaking", "high", ["match"] * 5)) is False
+    assert direct_vm.run_validator(leader_result=leader_dict("breaking", "high", ["match"] * 5)) is True
 
 
 def test_validator_rejects_fabricated_evidence(deploy, direct_vm):
